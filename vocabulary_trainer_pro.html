@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>単語マスター PRO - Vocabulary Trainer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .shake {
+            animation: shakeAnim 0.4s ease-in-out;
+        }
+        @keyframes shakeAnim {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .pop {
+            animation: popAnim 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popAnim {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes rainbowGlow {
+            0% { filter: drop-shadow(0 0 15px rgba(250, 204, 21, 0.6)); }
+            50% { filter: drop-shadow(0 0 25px rgba(244, 63, 94, 0.8)); }
+            100% { filter: drop-shadow(0 0 15px rgba(250, 204, 21, 0.6)); }
+        }
+        .perfect-glow {
+            animation: rainbowGlow 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 selection:bg-indigo-500 selection:text-white">
+
+    <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50 w-full h-full"></canvas>
+
+    <div id="app" class="w-full max-w-xl bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden relative z-10">
+        
+        <!-- Header / Progress Bar -->
+        <div id="header-bar" class="hidden p-6 pb-4 border-b border-slate-700/60 bg-slate-800/80 backdrop-blur">
+            <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center space-x-2">
+                    <span id="stage-badge" class="px-3 py-1 bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 text-xs font-bold rounded-full">STAGE 1</span>
+                    <span id="combo-badge" class="hidden px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-full pop">0 COMBO 🔥</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="text-xs text-slate-400 font-semibold" id="session-progress">
+                        残り: <span id="remaining-count" class="text-slate-200">10</span> 問
+                    </div>
+                    <button id="btn-pause" onclick="togglePause()" title="一時停止/再開" class="px-2.5 py-1 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-600/50 text-xs font-medium flex items-center space-x-1.5 transition active:scale-95">
+                        <svg id="pause-icon" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0v-12a.75.75 0 01.75-.75zm10.5 0a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0v-12a.75.75 0 01.75-.75z" clip-rule="evenodd" />
+                        </svg>
+                        <span id="pause-btn-text">一時停止</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 10-Second Timer Gauge & Remaining Seconds -->
+            <div class="flex justify-between items-center mb-1 text-[11px] font-semibold text-slate-400">
+                <span>回答制限時間</span>
+                <span id="timer-text" class="text-indigo-300 font-mono">10.0s</span>
+            </div>
+            <div class="w-full bg-slate-700/50 rounded-full h-3 overflow-hidden p-0.5 border border-slate-600/40">
+                <div id="timer-bar" style="width: 100%;" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-[width] duration-75"></div>
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="p-6 md:p-8 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                </svg>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-white mb-1 tracking-tight">単語マスター PRO</h1>
+            <p class="text-xs text-slate-400 max-w-sm mb-5">
+                リストの上から順に出題。10秒タイマーで素早く4択回答！<br>間違えた単語は習得できるまで重点反復します。
+            </p>
+
+            <!-- Stage Selection Buttons -->
+            <div class="w-full mb-6">
+                <div class="text-xs font-semibold text-slate-400 mb-2.5 flex items-center justify-center space-x-1">
+                    <span>🎯 学習するステージを選択</span>
+                </div>
+                <div id="stage-select-grid" class="grid grid-cols-3 sm:grid-cols-6 gap-2 w-full">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 w-full max-w-xs mb-6 text-left">
+                <div class="bg-slate-900/60 border border-slate-700/60 p-3 rounded-xl">
+                    <div class="text-[11px] text-slate-400 font-medium">選択中ステージ単語数</div>
+                    <div id="start-vocab-count" class="text-lg font-bold text-indigo-400">27 単語</div>
+                </div>
+                <div class="bg-slate-900/60 border border-slate-700/60 p-3 rounded-xl">
+                    <div class="text-[11px] text-slate-400 font-medium">出題ステージ</div>
+                    <div id="start-stage-num" class="text-lg font-bold text-teal-400">STAGE 1</div>
+                </div>
+            </div>
+
+            <button onclick="startSession()" class="w-full max-w-xs py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition transform active:scale-95 flex items-center justify-center space-x-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                </svg>
+                <span>このステージを始める</span>
+            </button>
+            <p class="text-[11px] text-slate-500 mt-2.5">Enterキーを押してもスタートできます</p>
+        </div>
+
+        <div id="quiz-screen" class="hidden p-6 md:p-8 flex flex-col items-center">
+            
+            <!-- Word Display & Speech Trigger -->
+            <div class="text-center my-4 w-full">
+                <div class="flex items-center justify-center space-x-3 mb-2">
+                    <h1 id="word-display" class="text-4xl md:text-5xl font-extrabold text-white tracking-wide pop">
+                        Loading...
+                    </h1>
+                    <button id="btn-speak" onclick="speakCurrentWord()" title="再発音" class="p-3 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 rounded-full transition active:scale-95 border border-indigo-500/30">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <p id="word-hint" class="text-xs text-slate-400">音声を聴いて意味を選択してください</p>
+            </div>
+
+            <!-- Options (4 Choices) -->
+            <div id="options-container" class="grid grid-cols-1 gap-3 w-full mt-4">
+                <!-- Dynamically populated buttons -->
+            </div>
+        </div>
+
+        <div id="summary-screen" class="hidden p-8 text-center flex flex-col items-center justify-center min-h-[420px]">
+            <!-- Perfect Badge (Shown when 100% correct) -->
+            <div id="perfect-badge-container" class="hidden flex-col items-center mb-2">
+                <div class="text-6xl mb-2 animate-bounce perfect-glow">🏆</div>
+                <div class="px-4 py-1 bg-amber-500/20 border border-amber-400/50 text-amber-300 font-extrabold rounded-full text-xs tracking-widest uppercase mb-2">
+                    ★ PERFECT CLEAR ★
+                </div>
+                <h2 class="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 mb-2">
+                    全問ノーミスクリア！神業です！
+                </h2>
+                <p class="text-slate-300 text-sm max-w-sm mb-4 leading-relaxed font-medium">
+                    圧倒的な語彙力！1問のミスもなく全問パーフェクト達成です！素晴らしい集中力でした🎉✨
+                </p>
+            </div>
+
+            <!-- Standard Clear Badge -->
+            <div id="normal-badge-container" class="flex flex-col items-center mb-2">
+                <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h2 class="text-3xl font-bold text-white mb-2" id="summary-title">Stage Clear!</h2>
+                <p class="text-slate-400 mb-6" id="summary-message">すべての単語を習得しました。</p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 w-full max-w-sm mt-2">
+                <button onclick="restartSession()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition shadow-lg shadow-indigo-600/30">
+                    もう一度挑戦
+                </button>
+                <button id="btn-next-stage" onclick="nextStage()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-600/30">
+                    次のステージへ
+                </button>
+            </div>
+            <button onclick="showStartScreen()" class="mt-4 text-xs text-slate-400 hover:text-slate-200 transition">
+                ← ステージ選択へ戻る
+            </button>
+        </div>
+
+        <div class="p-4 bg-slate-800/60 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
+            <button onclick="toggleImportModal()" class="hover:text-indigo-400 transition flex items-center space-x-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span>CSV/データ読み込み</span>
+            </button>
+            <div class="flex items-center space-x-2">
+                <span>自動発音:</span>
+                <input type="checkbox" id="auto-speak-toggle" checked class="accent-indigo-500 rounded cursor-pointer">
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause Overlay Modal -->
+    <div id="pause-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-40">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
+            <div class="w-14 h-14 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+                    <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0v-12a.75.75 0 01.75-.75zm10.5 0a.75.75 0 01.75.75v12a.75.75 0 01-1.5 0v-12a.75.75 0 01.75-.75z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-1">学習を一時停止中</h3>
+            <p class="text-xs text-slate-400 mb-6">タイマーは停止しています。準備ができたら再開してください。</p>
+
+            <div class="space-y-2.5">
+                <button onclick="togglePause()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                    </svg>
+                    <span>再開する</span>
+                </button>
+                <button onclick="abortSession()" class="w-full py-2.5 bg-slate-700/70 hover:bg-slate-700 text-rose-300 hover:text-rose-200 text-sm font-semibold rounded-xl border border-slate-600/50 transition">
+                    セッションを中断してやり直す
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="import-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-xl font-bold text-white mb-2">単語リストの読み込み</h3>
+            <p class="text-xs text-slate-400 mb-2">カンマ区切り（単語,意味）のCSV形式またはテキストを貼り付けてください。</p>
+            <p id="modal-msg" class="hidden text-xs py-1.5 px-3 rounded-lg mb-3"></p>
+            
+            <textarea id="csv-input" rows="6" placeholder="apple,りんご&#10;banana,バナナ&#10;resilient,回復力がある" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-indigo-500 mb-4"></textarea>
+
+            <div class="flex justify-end space-x-3">
+                <button onclick="toggleImportModal()" class="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm">キャンセル</button>
+                <button onclick="loadCustomCSV()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-lg transition">適用する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 各リストを独立した Stage 1 〜 Stage 6 として定義
+        const STAGE_LISTS = [
+            // Stage 1 (リスト 1: 27語)
+            [
+                { word: "still", meaning: "まだ、今でも" },
+                { word: "Wait a minute.", meaning: "ちょっと待って。" },
+                { word: "another", meaning: "もうひとつ" },
+                { word: "post office", meaning: "郵便局" },
+                { word: "during", meaning: "〜の間" },
+                { word: "until", meaning: "〜までずっと" },
+                { word: "beside", meaning: "そばに" },
+                { word: "scientist", meaning: "科学者" },
+                { word: "global warming", meaning: "地球温暖化" },
+                { word: "problem", meaning: "問題" },
+                { word: "research", meaning: "調査" },
+                { word: "energy", meaning: "エネルギー" },
+                { word: "environment", meaning: "環境" },
+                { word: "danger", meaning: "危険" },
+                { word: "hope", meaning: "〜を望む" },
+                { word: "job", meaning: "仕事" },
+                { word: "interview", meaning: "面談、インタビュー" },
+                { word: "airport", meaning: "空港" },
+                { word: "example", meaning: "例" },
+                { word: "road", meaning: "道、道路" },
+                { word: "because", meaning: "なぜなら" },
+                { word: "there is(are)", meaning: "〜がある、いる" },
+                { word: "accident", meaning: "事件、事故" },
+                { word: "appointment", meaning: "約束" },
+                { word: "apartment", meaning: "アパート" },
+                { word: "address", meaning: "住所" },
+                { word: "should", meaning: "〜すべき" }
+            ],
+            // Stage 2 (リスト 2: 18語)
+            [
+                { word: "bottle", meaning: "ボトル" },
+                { word: "recycle", meaning: "リサイクルする" },
+                { word: "glad", meaning: "喜ぶ" },
+                { word: "empty", meaning: "空っぽの" },
+                { word: "different", meaning: "違っている" },
+                { word: "serious", meaning: "真剣な" },
+                { word: "medicine", meaning: "薬" },
+                { word: "stomachache", meaning: "腹痛" },
+                { word: "get better", meaning: "具合が良くなる" },
+                { word: "a little", meaning: "少し" },
+                { word: "more", meaning: "もっと多く" },
+                { word: "later", meaning: "あとで" },
+                { word: "turn down", meaning: "音量をさげる" },
+                { word: "in front of", meaning: "〜の前で" },
+                { word: "meeting", meaning: "会議" },
+                { word: "right now", meaning: "今すぐ" },
+                { word: "yet", meaning: "まだ、もう" },
+                { word: "〜er than...", meaning: "…よりも〜だ" }
+            ],
+            // Stage 3 (リスト 3: 27語)
+            [
+                { word: "borrow", meaning: "借りる" },
+                { word: "lend", meaning: "貸す" },
+                { word: "catch", meaning: "つかまえる" },
+                { word: "cost", meaning: "費用がかかる" },
+                { word: "bottom", meaning: "底" },
+                { word: "dangerous", meaning: "危険な" },
+                { word: "high", meaning: "高い" },
+                { word: "short", meaning: "短い" },
+                { word: "deep", meaning: "深い" },
+                { word: "score", meaning: "点数" },
+                { word: "quick", meaning: "すばやく" },
+                { word: "total", meaning: "合計の" },
+                { word: "dolphin", meaning: "イルカ" },
+                { word: "aquarium", meaning: "水族館" },
+                { word: "cafeteria", meaning: "食堂" },
+                { word: "stadium", meaning: "スタジアム" },
+                { word: "university", meaning: "大学" },
+                { word: "busy", meaning: "忙しい" },
+                { word: "newspaper", meaning: "新聞" },
+                { word: "many", meaning: "たくさんの" },
+                { word: "enough", meaning: "十分な" },
+                { word: "little", meaning: "ほとんど〜ない" },
+                { word: "cousin", meaning: "いとこ" },
+                { word: "blanket", meaning: "毛布" },
+                { word: "castle", meaning: "城" },
+                { word: "send(sent)", meaning: "送る" },
+                { word: "record", meaning: "録画する" }
+            ],
+            // Stage 4 (リスト 4: 18語)
+            [
+                { word: "celebrate", meaning: "〜を祝う" },
+                { word: "boss", meaning: "上司" },
+                { word: "project", meaning: "プロジェクト、計画" },
+                { word: "not yet", meaning: "まだ〜ない" },
+                { word: "hurry", meaning: "急いで" },
+                { word: "promise", meaning: "約束" },
+                { word: "package", meaning: "荷物" },
+                { word: "grandparent", meaning: "祖父母" },
+                { word: "for the first time", meaning: "初めて" },
+                { word: "miss", meaning: "〜がいなくてさみしい" },
+                { word: "all the time", meaning: "ずっと" },
+                { word: "be absent from", meaning: "〜を欠席する" },
+                { word: "silent", meaning: "静かな" },
+                { word: "narrow", meaning: "せまい" },
+                { word: "straight", meaning: "まっすぐの" },
+                { word: "look forward to", meaning: "〜を楽しみにする" },
+                { word: "grow-grew-grown", meaning: "育てる" },
+                { word: "should", meaning: "〜すべきだ" }
+            ],
+            // Stage 5 (リスト 5: 30語)
+            [
+                { word: "nurse", meaning: "看護師" },
+                { word: "true", meaning: "真実、本当" },
+                { word: "fine", meaning: "元気な" },
+                { word: "report", meaning: "レポート" },
+                { word: "life", meaning: "生活、人生" },
+                { word: "topic", meaning: "話題" },
+                { word: "reason", meaning: "理由" },
+                { word: "chance", meaning: "機会、チャンス" },
+                { word: "way", meaning: "方法" },
+                { word: "main", meaning: "主な" },
+                { word: "over there", meaning: "向こう側" },
+                { word: "tournament", meaning: "トーナメント" },
+                { word: "planet", meaning: "惑星" },
+                { word: "entrance", meaning: "入口" },
+                { word: "horizon", meaning: "地平線、水平線" },
+                { word: "view", meaning: "眺め" },
+                { word: "century", meaning: "世紀" },
+                { word: "health", meaning: "健康" },
+                { word: "go home", meaning: "帰宅する" },
+                { word: "soon", meaning: "すぐに" },
+                { word: "dark", meaning: "暗い" },
+                { word: "young", meaning: "若い" },
+                { word: "low", meaning: "低い" },
+                { word: "wide", meaning: "幅が広い" },
+                { word: "a lot of", meaning: "たくさんの" },
+                { word: "sound", meaning: "音がする" },
+                { word: "bread", meaning: "パン" },
+                { word: "wood", meaning: "木材" },
+                { word: "danger", meaning: "危険" },
+                { word: "movie", meaning: "映画" }
+            ],
+            // Stage 6 (リスト 6: 30語)
+            [
+                { word: "tired", meaning: "疲れている" },
+                { word: "decide", meaning: "決める、決定する" },
+                { word: "practice", meaning: "練習する" },
+                { word: "join", meaning: "参加する" },
+                { word: "invite", meaning: "招待する" },
+                { word: "twice", meaning: "2回、2度" },
+                { word: "quickly", meaning: "すばやく" },
+                { word: "often", meaning: "たびたび" },
+                { word: "really", meaning: "本当に" },
+                { word: "far", meaning: "遠い" },
+                { word: "get off", meaning: "降りる" },
+                { word: "hour", meaning: "時間" },
+                { word: "become(became)", meaning: "〜になる" },
+                { word: "spend(spent)", meaning: "過ごす、費やす" },
+                { word: "lose(lost)", meaning: "なくす、道に迷う" },
+                { word: "buy(bought)", meaning: "買う" },
+                { word: "important", meaning: "大事な、大切な" },
+                { word: "protect", meaning: "保護する、守る" },
+                { word: "environment", meaning: "環境" },
+                { word: "agree with", meaning: "〜に賛成する" },
+                { word: "should", meaning: "〜すべき" },
+                { word: "eco-friendly", meaning: "環境にやさしい" },
+                { word: "invent", meaning: "発明する" },
+                { word: "fill", meaning: "いっぱいにする" },
+                { word: "grow(grew)", meaning: "育てる" },
+                { word: "be famous for", meaning: "〜で有名な" },
+                { word: "in my opinion", meaning: "私の考えでは" },
+                { word: "cheap", meaning: "安い" },
+                { word: "price", meaning: "価格" },
+                { word: "steal(stole)", meaning: "盗む" }
+            ]
+        ];
+
+        // 4択生成のための全単語辞書
+        let masterDictionary = STAGE_LISTS.flat();
+
+        let currentQueue = [];
+        let wrongQueue = [];
+        let currentItem = null;
+        let combo = 0;
+        let currentStage = 1;
+        let isGameStarted = false;
+        let mistakeCountThisStage = 0; // ノーミス判定用
+
+        // タイマーエンジン用変数 (ミリ秒精度・完全停止対応)
+        const TIMER_TOTAL_MS = 10000;
+        let timerRemainingMs = TIMER_TOTAL_MS;
+        let timerLastTimestamp = 0;
+        let timerAnimId = null;
+        let isTimerRunning = false;
+        let isPaused = false;
+        let isAnsweringDisabled = false;
+
+        // 解答後の待機移行タイマー管理
+        let pendingTransitionTimeout = null;
+        let pendingTransitionRemainingMs = 0;
+        let pendingTransitionStartTime = 0;
+        let pendingNextFunction = null;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // リアルな「ピンポン♪」効果音
+        function playCorrectSound() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const now = audioCtx.currentTime;
+
+            // 1音目：「ピン」（高音 1046.5 Hz = C6）
+            const osc1 = audioCtx.createOscillator();
+            const gain1 = audioCtx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(1046.5, now);
+            gain1.gain.setValueAtTime(0, now);
+            gain1.gain.linearRampToValueAtTime(0.3, now + 0.02);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            osc1.connect(gain1);
+            gain1.connect(audioCtx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.5);
+
+            // 2音目：「ポン」（少し低い音 783.99 Hz = G5） 0.15秒ずらして再生
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(783.99, now + 0.15);
+            gain2.gain.setValueAtTime(0, now + 0.15);
+            gain2.gain.linearRampToValueAtTime(0.35, now + 0.17);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.start(now + 0.15);
+            osc2.stop(now + 0.7);
+        }
+
+        // 不正解時のブブー音
+        function playIncorrectSound() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(140, now);
+            osc.frequency.setValueAtTime(110, now + 0.15);
+
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + 0.4);
+        }
+
+        // 華やかなパーフェクト勝利ファンファーレ♪
+        function playFanfare() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const notes = [
+                { f: 523.25, d: 0.12 }, // C5
+                { f: 659.25, d: 0.12 }, // E5
+                { f: 783.99, d: 0.12 }, // G5
+                { f: 1046.50, d: 0.35 }, // C6
+                { f: 783.99, d: 0.12 }, // G5
+                { f: 1046.50, d: 0.6 }  // C6
+            ];
+
+            let time = audioCtx.currentTime + 0.05;
+            notes.forEach(n => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(n.f, time);
+
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(0.35, time + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + n.d);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start(time);
+                osc.stop(time + n.d);
+                time += n.d;
+            });
+        }
+
+        // パーフェクトクリア用の紙吹雪演出
+        let confettiAnimationId = null;
+        function launchConfetti() {
+            const canvas = document.getElementById("confetti-canvas");
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#f59e0b', '#ec4899', '#3b82f6', '#10b981', '#8b5cf6', '#f43f5e', '#eab308'];
+
+            for (let i = 0; i < 120; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * -canvas.height * 0.5,
+                    w: Math.random() * 9 + 5,
+                    h: Math.random() * 8 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: Math.random() * 4 + 3,
+                    rot: Math.random() * 360,
+                    rotSpeed: (Math.random() - 0.5) * 8
+                });
+            }
+
+            let start = performance.now();
+            function renderConfetti(now) {
+                const elapsed = now - start;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.rot += p.rotSpeed;
+
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rot * Math.PI) / 180);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+                    ctx.restore();
+                });
+
+                if (elapsed < 4500) {
+                    confettiAnimationId = requestAnimationFrame(renderConfetti);
+                } else {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+            if (confettiAnimationId) cancelAnimationFrame(confettiAnimationId);
+            confettiAnimationId = requestAnimationFrame(renderConfetti);
+        }
+
+        function stopConfetti() {
+            if (confettiAnimationId) {
+                cancelAnimationFrame(confettiAnimationId);
+                confettiAnimationId = null;
+            }
+            const canvas = document.getElementById("confetti-canvas");
+            if (canvas) {
+                const ctx = canvas.getContext("2d");
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function speakCurrentWord() {
+            if (!currentItem || isPaused) return;
+            window.speechSynthesis.cancel();
+
+            let speechText = currentItem.word
+                .replace(/[〜~…\.]/g, ' ')
+                .replace(/[\(\)]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!speechText) speechText = currentItem.word;
+
+            const utterance = new SpeechSynthesisUtterance(speechText);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.9;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function updateTimerUI(ratio, ms) {
+            const timerBar = document.getElementById("timer-bar");
+            const timerText = document.getElementById("timer-text");
+            const pct = Math.max(0, Math.min(100, ratio * 100));
+
+            if (timerBar) {
+                timerBar.style.width = `${pct}%`;
+                if (ratio > 0.45) {
+                    timerBar.className = "h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-[width] duration-75";
+                } else if (ratio > 0.2) {
+                    timerBar.className = "h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-[width] duration-75";
+                } else {
+                    timerBar.className = "h-full bg-gradient-to-r from-rose-600 to-red-500 rounded-full transition-[width] duration-75";
+                }
+            }
+            if (timerText) {
+                const sec = (Math.max(0, ms) / 1000).toFixed(1);
+                timerText.textContent = isPaused ? `${sec}s (一時停止中)` : `${sec}s`;
+            }
+        }
+
+        function stopQuestionTimer() {
+            isTimerRunning = false;
+            if (timerAnimId) {
+                cancelAnimationFrame(timerAnimId);
+                timerAnimId = null;
+            }
+        }
+
+        function startQuestionTimer() {
+            stopQuestionTimer();
+            timerRemainingMs = TIMER_TOTAL_MS;
+            timerLastTimestamp = performance.now();
+            isTimerRunning = true;
+            updateTimerUI(1.0, timerRemainingMs);
+
+            function tick(now) {
+                if (!isTimerRunning) return;
+
+                if (!isPaused) {
+                    const delta = now - timerLastTimestamp;
+                    timerRemainingMs -= delta;
+
+                    if (timerRemainingMs <= 0) {
+                        timerRemainingMs = 0;
+                        updateTimerUI(0, 0);
+                        isTimerRunning = false;
+                        handleTimeOut();
+                        return;
+                    }
+                    updateTimerUI(timerRemainingMs / TIMER_TOTAL_MS, timerRemainingMs);
+                }
+
+                timerLastTimestamp = now;
+                timerAnimId = requestAnimationFrame(tick);
+            }
+
+            timerAnimId = requestAnimationFrame(tick);
+        }
+
+        function selectStage(stageNum) {
+            currentStage = stageNum;
+            renderStageSelector();
+            updateStartScreenInfo();
+        }
+
+        function renderStageSelector() {
+            const container = document.getElementById("stage-select-grid");
+            if (!container) return;
+            container.innerHTML = "";
+
+            STAGE_LISTS.forEach((list, idx) => {
+                const stageNum = idx + 1;
+                const isSelected = stageNum === currentStage;
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.onclick = () => selectStage(stageNum);
+                btn.className = `p-2 rounded-xl text-center font-bold text-xs transition border flex flex-col items-center justify-center ${
+                    isSelected 
+                        ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/40 ring-2 ring-indigo-400/50 scale-105' 
+                        : 'bg-slate-900/60 border-slate-700/60 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                }`;
+                btn.innerHTML = `
+                    <span class="text-[10px] uppercase text-indigo-200">STAGE</span>
+                    <span class="text-base">${stageNum}</span>
+                    <span class="text-[10px] text-slate-400 font-normal mt-0.5">${list.length}語</span>
+                `;
+                container.appendChild(btn);
+            });
+        }
+
+        function updateStartScreenInfo() {
+            const list = STAGE_LISTS[currentStage - 1] || [];
+            document.getElementById("start-vocab-count").textContent = `${list.length} 単語`;
+            document.getElementById("start-stage-num").textContent = `STAGE ${currentStage}`;
+        }
+
+        function showStartScreen() {
+            stopQuestionTimer();
+            clearPendingTransition();
+            stopConfetti();
+            window.speechSynthesis.cancel();
+            isGameStarted = false;
+            isPaused = false;
+
+            renderStageSelector();
+            updateStartScreenInfo();
+            
+            document.getElementById("header-bar").classList.add("hidden");
+            document.getElementById("start-screen").classList.remove("hidden");
+            document.getElementById("quiz-screen").classList.add("hidden");
+            document.getElementById("summary-screen").classList.add("hidden");
+            document.getElementById("pause-modal").classList.add("hidden");
+        }
+
+        function startSession() {
+            stopQuestionTimer();
+            clearPendingTransition();
+            stopConfetti();
+
+            // 選択されたステージの単語リストを「上から順」に出題
+            const stageWords = STAGE_LISTS[currentStage - 1] || STAGE_LISTS[0];
+            currentQueue = [...stageWords]; // ランダムにせず上から順に出題
+            wrongQueue = [];
+            combo = 0;
+            mistakeCountThisStage = 0; // ノーミス判定リセット
+            isGameStarted = true;
+            isPaused = false;
+            isAnsweringDisabled = false;
+
+            document.getElementById("pause-modal").classList.add("hidden");
+            document.getElementById("btn-pause").classList.remove("hidden");
+            document.getElementById("pause-btn-text").textContent = "一時停止";
+            document.getElementById("stage-badge").textContent = `STAGE ${currentStage}`;
+            updateComboUI();
+
+            document.getElementById("start-screen").classList.add("hidden");
+            document.getElementById("header-bar").classList.remove("hidden");
+            document.getElementById("quiz-screen").classList.remove("hidden");
+            document.getElementById("summary-screen").classList.add("hidden");
+            
+            nextQuestion();
+        }
+
+        function clearPendingTransition() {
+            if (pendingTransitionTimeout) {
+                clearTimeout(pendingTransitionTimeout);
+                pendingTransitionTimeout = null;
+            }
+            pendingTransitionRemainingMs = 0;
+            pendingNextFunction = null;
+        }
+
+        function scheduleNextQuestion(delayMs) {
+            clearPendingTransition();
+            pendingTransitionRemainingMs = delayMs;
+            pendingTransitionStartTime = performance.now();
+            pendingNextFunction = nextQuestion;
+
+            pendingTransitionTimeout = setTimeout(() => {
+                pendingTransitionTimeout = null;
+                pendingTransitionRemainingMs = 0;
+                nextQuestion();
+            }, delayMs);
+        }
+
+        function nextQuestion() {
+            stopQuestionTimer();
+            clearPendingTransition();
+            isAnsweringDisabled = false;
+
+            if (currentQueue.length === 0) {
+                if (wrongQueue.length > 0) {
+                    // 間違えた単語があれば、それらを復習キューとして再出題
+                    currentQueue = [...wrongQueue];
+                    wrongQueue = [];
+                } else {
+                    showSummary();
+                    return;
+                }
+            }
+
+            currentItem = currentQueue.shift();
+            
+            document.getElementById("remaining-count").textContent = currentQueue.length + 1;
+            const wordDisplay = document.getElementById("word-display");
+            wordDisplay.textContent = currentItem.word;
+            
+            wordDisplay.classList.remove("pop");
+            void wordDisplay.offsetWidth;
+            wordDisplay.classList.add("pop");
+
+            if (document.getElementById("auto-speak-toggle").checked && !isPaused) {
+                speakCurrentWord();
+            }
+
+            const choices = generateChoices(currentItem);
+            renderOptions(choices);
+
+            startQuestionTimer();
+        }
+
+        function generateChoices(correctItem) {
+            const choices = [correctItem.meaning];
+            const otherMeanings = masterDictionary
+                .filter(item => item.meaning !== correctItem.meaning)
+                .map(item => item.meaning);
+
+            const shuffledOthers = otherMeanings.sort(() => Math.random() - 0.5);
+            for (let i = 0; i < Math.min(3, shuffledOthers.length); i++) {
+                choices.push(shuffledOthers[i]);
+            }
+
+            return choices.sort(() => Math.random() - 0.5);
+        }
+
+        function renderOptions(choices) {
+            const container = document.getElementById("options-container");
+            container.innerHTML = "";
+
+            choices.forEach((choice, index) => {
+                const btn = document.createElement("button");
+                btn.className = "w-full p-4 bg-slate-700/60 hover:bg-slate-700 text-slate-100 text-left font-semibold rounded-xl border border-slate-600/50 hover:border-indigo-500/50 transition-all flex items-center justify-between group active:scale-[0.99]";
+                btn.dataset.choice = choice;
+                btn.innerHTML = `
+                    <span class="flex items-center space-x-3">
+                        <span class="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center text-xs transition font-bold border border-slate-600/40">${index + 1}</span>
+                        <span>${choice}</span>
+                    </span>
+                    <span class="answer-badge hidden text-xs font-bold px-2 py-0.5 rounded"></span>
+                `;
+                btn.onclick = () => {
+                    if (isPaused || isAnsweringDisabled) return;
+                    handleAnswer(choice === currentItem.meaning, btn);
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function togglePause() {
+            const pauseModal = document.getElementById("pause-modal");
+            const btnText = document.getElementById("pause-btn-text");
+
+            if (!isPaused) {
+                isPaused = true;
+                window.speechSynthesis.cancel();
+
+                if (pendingTransitionTimeout) {
+                    const elapsed = performance.now() - pendingTransitionStartTime;
+                    pendingTransitionRemainingMs = Math.max(0, pendingTransitionRemainingMs - elapsed);
+                    clearTimeout(pendingTransitionTimeout);
+                    pendingTransitionTimeout = null;
+                }
+
+                updateTimerUI(timerRemainingMs / TIMER_TOTAL_MS, timerRemainingMs);
+
+                pauseModal.classList.remove("hidden");
+                btnText.textContent = "再開";
+            } else {
+                isPaused = false;
+                timerLastTimestamp = performance.now();
+
+                if (pendingTransitionRemainingMs > 0 && pendingNextFunction) {
+                    pendingTransitionStartTime = performance.now();
+                    pendingTransitionTimeout = setTimeout(() => {
+                        pendingTransitionTimeout = null;
+                        const fn = pendingNextFunction;
+                        pendingNextFunction = null;
+                        pendingTransitionRemainingMs = 0;
+                        fn();
+                    }, pendingTransitionRemainingMs);
+                }
+
+                updateTimerUI(timerRemainingMs / TIMER_TOTAL_MS, timerRemainingMs);
+
+                pauseModal.classList.add("hidden");
+                btnText.textContent = "一時停止";
+            }
+        }
+
+        function abortSession() {
+            isPaused = false;
+            stopQuestionTimer();
+            clearPendingTransition();
+            stopConfetti();
+            document.getElementById("pause-modal").classList.add("hidden");
+            document.getElementById("pause-btn-text").textContent = "一時停止";
+            showStartScreen();
+        }
+
+        function highlightCorrectAnswer() {
+            const allBtns = document.querySelectorAll("#options-container button");
+            allBtns.forEach(b => {
+                b.disabled = true;
+                if (b.dataset.choice === currentItem.meaning) {
+                    b.classList.remove("bg-slate-700/60", "hover:bg-slate-700", "border-slate-600/50");
+                    b.classList.add("bg-emerald-600/90", "text-white", "border-emerald-400", "ring-2", "ring-emerald-400/60");
+                    const badge = b.querySelector(".answer-badge");
+                    if (badge) {
+                        badge.textContent = "✓ 正解";
+                        badge.className = "answer-badge text-xs font-bold px-2 py-0.5 rounded bg-emerald-700 text-emerald-100 border border-emerald-300/40";
+                    }
+                }
+            });
+        }
+
+        function handleTimeOut() {
+            stopQuestionTimer();
+            isAnsweringDisabled = true;
+            playIncorrectSound();
+            wrongQueue.push(currentItem);
+            mistakeCountThisStage++;
+            combo = 0;
+            updateComboUI();
+            
+            highlightCorrectAnswer();
+
+            document.getElementById("app").classList.add("shake");
+            setTimeout(() => document.getElementById("app").classList.remove("shake"), 400);
+
+            scheduleNextQuestion(1600);
+        }
+
+        function handleAnswer(isCorrect, buttonEl) {
+            stopQuestionTimer();
+            isAnsweringDisabled = true;
+
+            const allBtns = document.querySelectorAll("#options-container button");
+            allBtns.forEach(b => b.disabled = true);
+
+            if (isCorrect) {
+                playCorrectSound();
+                buttonEl.classList.remove("bg-slate-700/60", "hover:bg-slate-700");
+                buttonEl.classList.add("bg-emerald-600", "text-white", "border-emerald-500");
+                const badge = buttonEl.querySelector(".answer-badge");
+                if (badge) {
+                    badge.textContent = "✓ 正解";
+                    badge.className = "answer-badge text-xs font-bold px-2 py-0.5 rounded bg-emerald-800 text-emerald-100";
+                }
+                combo++;
+                updateComboUI();
+                scheduleNextQuestion(550);
+            } else {
+                playIncorrectSound();
+                buttonEl.classList.remove("bg-slate-700/60", "hover:bg-slate-700");
+                buttonEl.classList.add("bg-rose-600", "text-white", "border-rose-500");
+                const badge = buttonEl.querySelector(".answer-badge");
+                if (badge) {
+                    badge.textContent = "✕ 不正解";
+                    badge.className = "answer-badge text-xs font-bold px-2 py-0.5 rounded bg-rose-800 text-rose-100";
+                }
+
+                highlightCorrectAnswer();
+
+                document.getElementById("app").classList.add("shake");
+                setTimeout(() => document.getElementById("app").classList.remove("shake"), 400);
+
+                wrongQueue.push(currentItem);
+                mistakeCountThisStage++;
+                combo = 0;
+                updateComboUI();
+
+                scheduleNextQuestion(1600);
+            }
+        }
+
+        function updateComboUI() {
+            const badge = document.getElementById("combo-badge");
+            if (combo > 1) {
+                badge.textContent = `${combo} COMBO 🔥`;
+                badge.classList.remove("hidden");
+            } else {
+                badge.classList.add("hidden");
+            }
+        }
+
+        function showSummary() {
+            stopQuestionTimer();
+            clearPendingTransition();
+            document.getElementById("quiz-screen").classList.add("hidden");
+            document.getElementById("summary-screen").classList.remove("hidden");
+            document.getElementById("btn-pause").classList.add("hidden");
+
+            const isPerfect = (mistakeCountThisStage === 0);
+            const perfectContainer = document.getElementById("perfect-badge-container");
+            const normalContainer = document.getElementById("normal-badge-container");
+            const nextStageBtn = document.getElementById("btn-next-stage");
+
+            // 最後のステージの場合は次のステージボタンを調整
+            if (currentStage >= STAGE_LISTS.length) {
+                nextStageBtn.textContent = "Stage 1 へ戻る";
+            } else {
+                nextStageBtn.textContent = `Stage ${currentStage + 1} へ進む`;
+            }
+
+            if (isPerfect) {
+                // 全問ノーミスクリア！派手に褒める演出を発動！
+                perfectContainer.classList.remove("hidden");
+                perfectContainer.classList.add("flex");
+                normalContainer.classList.add("hidden");
+
+                playFanfare();
+                launchConfetti();
+            } else {
+                // 復習を経てクリア
+                perfectContainer.classList.add("hidden");
+                perfectContainer.classList.remove("flex");
+                normalContainer.classList.remove("hidden");
+                
+                document.getElementById("summary-title").textContent = `Stage ${currentStage} Complete!`;
+                document.getElementById("summary-message").textContent = `復習を重ねてStage ${currentStage} の全単語をマスターしました！`;
+            }
+        }
+
+        function restartSession() {
+            startSession();
+        }
+
+        function nextStage() {
+            if (currentStage < STAGE_LISTS.length) {
+                currentStage++;
+            } else {
+                currentStage = 1;
+            }
+            startSession();
+        }
+
+        function toggleImportModal() {
+            const modal = document.getElementById("import-modal");
+            modal.classList.toggle("hidden");
+            const modalMsg = document.getElementById("modal-msg");
+            if (modalMsg) modalMsg.classList.add("hidden");
+        }
+
+        function loadCustomCSV() {
+            const text = document.getElementById("csv-input").value.trim();
+            const modalMsg = document.getElementById("modal-msg");
+            if (!text) return;
+
+            const lines = text.split("\n");
+            const newDict = [];
+
+            lines.forEach(line => {
+                const parts = line.split(",");
+                if (parts.length >= 2) {
+                    newDict.push({
+                        word: parts[0].trim(),
+                        meaning: parts[1].trim()
+                    });
+                }
+            });
+
+            if (newDict.length >= 4) {
+                // 読み込んだ単語をStage 1として登録
+                STAGE_LISTS[0] = newDict;
+                masterDictionary = STAGE_LISTS.flat();
+                currentStage = 1;
+                toggleImportModal();
+                showStartScreen();
+            } else if (modalMsg) {
+                modalMsg.textContent = "選択肢を作成するために、最低4つ以上の単語データが必要です。";
+                modalMsg.className = "text-xs py-1.5 px-3 rounded-lg mb-3 bg-rose-500/20 text-rose-300 border border-rose-500/30 block";
+            }
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !isGameStarted) {
+                const importModal = document.getElementById("import-modal");
+                if (importModal && importModal.classList.contains("hidden")) {
+                    startSession();
+                }
+            }
+        });
+
+        window.addEventListener("resize", () => {
+            const canvas = document.getElementById("confetti-canvas");
+            if (canvas) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+        });
+
+        // 初期起動時は開始画面を表示
+        window.onload = function() {
+            showStartScreen();
+        };
+    </script>
+</body>
+</html>
